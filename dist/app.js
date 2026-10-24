@@ -2,9 +2,13 @@ const $=id=>document.getElementById(id),defaults=['사과','우산','기차','�
 let mapping=[],order=[],pos=0,quizPos=0,firstCorrect=0,attempted=false,resolved=false,paused=false,timer=null,run=0,started=0,remaining=0,speaking=false,elapsed=false,currentUtterance=null;
 const synth=window.speechSynthesis;
 function shuffle(a){a=[...a];for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
-function save(){try{localStorage.setItem('scribble-settings',JSON.stringify({words:$('words').value,interval:$('interval').value,language:$('language').value}))}catch{}}
-try{const s=JSON.parse(localStorage.getItem('scribble-settings')||'null');$('words').value=s?.words||defaults.join('\n');$('interval').value=s?.interval||3;$('language').value=s?.language||'ko-KR'}catch{$('words').value=defaults.join('\n')}
-function intervalLabel(){$('seconds').textContent=$('interval').value+'초'}intervalLabel();['words','interval','language'].forEach(id=>$(id).addEventListener('input',()=>{save();intervalLabel()}));
+let previousWords=[];
+try{const saved=JSON.parse(localStorage.getItem('scribble-last-words')||'[]');if(Array.isArray(saved))previousWords=saved.filter(w=>typeof w==='string')}catch{}
+function drawWords(){const previous=new Set(previousWords);const available=WORD_POOL.filter(word=>!previous.has(word));const picked=shuffle(available.length>=20?available:WORD_POOL).slice(0,20);previousWords=picked;try{localStorage.setItem('scribble-last-words',JSON.stringify(picked))}catch{}return picked}
+function save(){try{localStorage.setItem('scribble-settings',JSON.stringify({words:$('words').value,mode:$('wordMode').value,interval:$('interval').value,language:$('language').value}))}catch{}}
+try{const s=JSON.parse(localStorage.getItem('scribble-settings')||'null');$('words').value=s?.words||defaults.join('\n');$('wordMode').value=s?.mode==='custom'?'custom':'random';$('interval').value=s?.interval||3;$('language').value=s?.language||'ko-KR'}catch{$('words').value=defaults.join('\n');$('wordMode').value='random'}
+function modeUI(){$('customWords').hidden=$('wordMode').value!=='custom';$('poolInfo').textContent=`일상 단어 ${WORD_POOL.length}개에서 20개를 뽑아요. 바로 전 학습의 단어는 제외해요.`;$('poolInfo').hidden=$('wordMode').value==='custom'}
+function intervalLabel(){$('seconds').textContent=$('interval').value+'초'}intervalLabel();modeUI();['words','interval','language','wordMode'].forEach(id=>$(id).addEventListener('input',()=>{save();intervalLabel();modeUI()}));
 $('defaults').onclick=()=>{$('words').value=defaults.join('\n');save()};
 function screen(id){['setup','learn','ready','test','result'].forEach(x=>$(x).hidden=x!==id);window.scrollTo(0,0)}
 function stop(){run++;clearTimeout(timer);synth?.cancel();speaking=false;currentUtterance=null}
@@ -13,7 +17,7 @@ function speak(text,done){if(!synth||!window.SpeechSynthesisUtterance){$('audioM
 function maybeAdvance(){if(!paused&&!speaking&&elapsed){pos++;if(pos===20){stop();screen('ready')}else showWord()}}
 function schedule(ms){remaining=ms;started=Date.now();const token=run;timer=setTimeout(()=>{if(token!==run)return;elapsed=true;maybeAdvance()},ms)}
 function showWord(){clearTimeout(timer);elapsed=false;speaking=true;$('learnCount').textContent=`${pos+1} / 20`;$('learnNumber').textContent=pos+1;$('learnWord').textContent=mapping[pos];$('bar').style.width=((pos+1)*5)+'%';schedule(Number($('interval').value)*1000);speak(mapping[pos],()=>{speaking=false;maybeAdvance()})}
-$('start').onclick=()=>{const words=$('words').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);if(words.length!==20){$('setupError').textContent=`단어를 정확히 20개 입력해 주세요. 현재 ${words.length}개입니다.`;return}$('setupError').textContent='';save();stop();mapping=shuffle(words);pos=0;paused=false;$('pause').textContent='일시정지';$('audioMessage').textContent='휴대폰의 소리를 켜 주세요. 학습 중에는 이 화면을 유지해 주세요.';screen('learn');showWord()};
+$('start').onclick=()=>{const custom=$('wordMode').value==='custom';const words=custom?$('words').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean):drawWords();if(words.length!==20){$('setupError').textContent=`단어를 정확히 20개 입력해 주세요. 현재 ${words.length}개입니다.`;return}$('setupError').textContent='';save();stop();mapping=shuffle(words);pos=0;paused=false;$('pause').textContent='일시정지';$('audioMessage').textContent='휴대폰의 소리를 켜 주세요. 학습 중에는 이 화면을 유지해 주세요.';screen('learn');showWord()};
 $('pause').onclick=()=>{if(!paused){paused=true;remaining=Math.max(0,remaining-(Date.now()-started));clearTimeout(timer);run++;synth?.cancel();speaking=false;$('pause').textContent='계속하기'}else{paused=false;$('pause').textContent='일시정지';speaking=true;elapsed=false;schedule(remaining);speak(mapping[pos],()=>{speaking=false;maybeAdvance()})}};
 $('repeat').onclick=()=>{clearTimeout(timer);run++;synth?.cancel();paused=false;$('pause').textContent='일시정지';showWord()};
 function startTest(){stop();order=shuffle(Array.from({length:20},(_,i)=>i));quizPos=0;firstCorrect=0;screen('test');question()}
