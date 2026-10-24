@@ -87,4 +87,3 @@ $('hostToggle').onclick=async()=>{
     scheduleHost(session);
   }catch{if(session===hostSession){stopHost();$('hostStatus').textContent='소리를 시작하지 못했어요. 재생 버튼을 다시 눌러 주세요.'}}
 };
-$('hostTest').onclick=startTest;
